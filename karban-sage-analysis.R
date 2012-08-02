@@ -22,13 +22,28 @@ coordinates(d) = c('x', 'y')
 d$x = coordinates(d)[,1]
 d$y = coordinates(d)[,2]
 
-# Spatial blocks
-d$spblock[d$receiver > 73] = 1
+# Spatial blocks with 3 blocks
+# block 1 is lower right, 2 is upper right, 3 is left
+d$spblock[d$receiver > 73] = 1 
 d$spblock[is.na(d$spblock)][d$x[is.na(d$spblock)] > 0] = 2
 d$spblock[is.na(d$spblock)][d$x[is.na(d$spblock)] < 0] = 3
 
 plot(y ~ x, data=d, type='n')
 text(y ~ x, data=d, labels=d$spblock)
+
+# Spatial blocks with 2 blocks
+# block 1 is right side (lower herb), 2 is left side (high herb)
+d$spblock2[d$receiver > 73] = 1 
+d$spblock2[is.na(d$spblock2)][d$x[is.na(d$spblock2)] > 0] = 1
+d$spblock2[is.na(d$spblock2)][d$x[is.na(d$spblock2)] < 0] = 2
+
+plot(y ~ x, data=d, type='n')
+text(y~x, data=d, labels=d$spblock2)
+
+hist(d$damage[d$spblock2==1], xlim=c(0,100), border='blue')
+hist(d$damage[d$spblock2==2], xlim=c(0,100), add=TRUE, lty=2, 
+	breaks=9, border='red')
+
 
 d$healthy = 100 - d$damage
 d$damage.prop = d$damage/100
@@ -54,9 +69,10 @@ plot3d(d$damage ~ d$x + d$r, type='h', add=TRUE)
 plot3d(d$r ~ d$x + d$y, type='s', size=0.5)
 plot3d(d$r ~ d$x + d$y, type='h', add=TRUE)
 
-plot(damage ~ x, data=d)
-plot(damage ~ r, data=d)
+plot(damage ~ x, data=d, pch=as.character(d$spblock2))
+plot(damage ~ r, data=d, pch=as.character(d$spblock2))
 plot(asdamage ~ r, data=d)
+plot(damage ~ spblock2, data=d)
 
 spplot(d, 'damage', do.log=TRUE)
 bubble(d, 'damage')
@@ -245,52 +261,116 @@ plot(y ~ x, data=d, cex= (resid(k11)+1)/ (max(resid(k11) + 1)) *3 )
 
 #############
 
+# random and fixed effect of x, McElreath's suggestion
 k22 = glmer(cbind(d$damage, d$healthy) ~ 
 	x + (1 + x|receiver), data=d, 
 	family='binomial', REML=FALSE)
-
 k23 = glmer(cbind(d$damage, d$healthy) ~ 
 	r + x + (1 + x|receiver), data=d, 
 	family='binomial', REML=FALSE)
+k23.5 = glmer(cbind(d$damage, d$healthy) ~ 
+	r + x + r:x + (1 + x|receiver), data=d, 
+	family='binomial', REML=FALSE)
+extractDIC(k22) - extractDIC(k23.5)
 
+# fixed effect of x
 k30 = glmer(cbind(d$damage, d$healthy) ~ 
 	x + (1|receiver), data=d, 
 	family='binomial', REML=FALSE)
-
 k31 = glmer(cbind(d$damage, d$healthy) ~ 
 	r + x + (1|receiver), data=d, 
 	family='binomial', REML=FALSE)
+k31.5 = glmer(cbind(d$damage, d$healthy) ~ 
+	r + x + r:x + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
 
+# random slopes for r and random and fixed x
 k32 = glmer(cbind(d$damage, d$healthy) ~ 
 	x + (1 + x + r|receiver), data=d, 
 	family='binomial', REML=FALSE)
-
 k33 = glmer(cbind(d$damage, d$healthy) ~ 
 	r + x + (1 + x + r|receiver), data=d, 
 	family='binomial', REML=FALSE)
 
+# random slopes for r and fixed effect for x
 k34 = glmer(cbind(d$damage, d$healthy) ~ 
 	x + (1 + r|receiver), data=d, 
 	family='binomial', REML=FALSE)
-
 k35 = glmer(cbind(d$damage, d$healthy) ~ 
 	r + x + (1 + r|receiver), data=d, 
 	family='binomial', REML=FALSE)
 
+# no effect of x
+k36 = glmer(cbind(d$damage, d$healthy) ~ 
+	(1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+k37 = glmer(cbind(d$damage, d$healthy) ~ 
+	r + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
 
-AICctab(k22, k23, nobs=65)
+
+AICctab(k22, k23, k23.5, nobs=65)
+BICtab(k22, k23, nobs=65)
 anova(k22,k23)
+anova(k22, k23.5)
+extractDIC(k22)
+extractDIC(k23)
 
-AICctab(k30, k31, nobs=65)
+
+AICctab(k30, k31, k31.5, nobs=65)
+BICtab(k22, k23, nobs=65)
 anova(k30,k31)
+extractDIC(k30)
+extractDIC(k31)
+
 
 AICctab(k32, k33, nobs=65)
 anova(k32,k33)
+extractDIC(k32)
+extractDIC(k33)
 
 AICctab(k34, k35, nobs=65)
 anova(k34,k35)
+extractDIC(k34)
+extractDIC(k35)
 
-#------------ models with spatial blocks (spblock) ------------#
+BICtab(k32,k33, k22,k23, nobs=65)
+extractDIC(k33)
+extractDIC(k23)
+
+AICctab(k36, k37, nobs=65)
+anova(k36,k37)
+extractDIC(k36)
+extractDIC(k37)
+
+AICctab(k22, k23, k23.5,k30, k31, k31.5, nobs=65)
+
+#---------- final models with x instead of sp block --------------------------#
+
+# fixed effect of x, no random effect of x
+x0 = glmer(cbind(d$damage, d$healthy) ~ 
+	(1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+xx = glmer(cbind(d$damage, d$healthy) ~ 
+	x + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+xr = glmer(cbind(d$damage, d$healthy) ~ 
+	r + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+xxr = glmer(cbind(d$damage, d$healthy) ~ 
+	r + x + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+xxrint = glmer(cbind(d$damage, d$healthy) ~ 
+	r + x + r:x + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+
+AICctab(x0, xx, xr, xxr, xxrint, weights=TRUE, nobs=65)
+
+
+
+
+#------------ models with 3 spatial blocks (spblock) ------------#
 
 d$spblock = as.factor(d$spblock)
 d$receiver = as.factor(d$receiver)
@@ -298,14 +378,206 @@ d$receiver = as.factor(d$receiver)
 sp0 = glmer(cbind(d$damage, d$healthy) ~ 
 	(1| spblock / receiver), data=d, 
 	family='binomial', REML=FALSE)
-
-
 sp1 = glmer(cbind(d$damage, d$healthy) ~ 
 	r + (1| spblock / receiver), data=d, 
 	family='binomial', REML=FALSE)
 
 AICctab(sp0, sp1, nobs=65)
 anova(sp0, sp1)
+
+sp0r = glmer(cbind(d$damage, d$healthy) ~ 
+	(1 + r| spblock / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp1r = glmer(cbind(d$damage, d$healthy) ~ 
+	r + (1 + r| spblock / receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+AICctab(sp0r, sp1r, nobs=65)
+anova(sp0r, sp1r)
+
+sp0int = glmer(cbind(d$damage, d$healthy) ~ 
+	(1| spblock / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp0.5int = glmer(cbind(d$damage, d$healthy) ~ 
+	spblock + (1| spblock / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp1int = glmer(cbind(d$damage, d$healthy) ~ 
+	r + spblock + r:spblock + (1| spblock / receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+AICctab(sp0int, sp1int, sp0.5int, nobs=65)
+anova(sp0.5int, sp1int)
+
+
+
+#------ explore effects of spatial blocks  -----------------#
+
+plot(damage.prop ~ r, data=d, pch=as.character(d$spblock),
+	col=d$spblock)
+lines(loess.smooth(d$r[d$spblock==1], d$damage.prop[d$spblock==1]))
+lines(loess.smooth(d$r[d$spblock==2], d$damage.prop[d$spblock==2]), 
+	col='red')
+lines(loess.smooth(d$r[d$spblock==3], d$damage.prop[d$spblock==3]),
+	col='green')
+abline(lm(damage.prop ~ r, data=d, subset=d$spblock==1), lty=2)
+abline(lm(damage.prop ~ r, data=d, subset=d$spblock==2), lty=2,
+	col='red')
+abline(lm(damage.prop ~ r, data=d, subset=d$spblock==3), lty=2,
+	col='green')
+
+summary(lm(damage.prop ~ r, data=d, subset=d$spblock==1))
+
+#------------ models with 2 spatial blocks (spblock) ------------#
+
+d$spblock2 = as.factor(d$spblock2)
+d$receiver = as.factor(d$receiver)
+
+sp0 = glmer(cbind(d$damage, d$healthy) ~ 
+	(1| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp1 = glmer(cbind(d$damage, d$healthy) ~ 
+	r + (1| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+AICctab(sp0, sp1, nobs=65)
+anova(sp0, sp1)
+
+sp0r = glmer(cbind(d$damage, d$healthy) ~ 
+	(1 + r| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp1r = glmer(cbind(d$damage, d$healthy) ~ 
+	r + (1 + r| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+AICctab(sp0r, sp1r, nobs=65)
+anova(sp0r, sp1r)
+
+sp0int = glmer(cbind(d$damage, d$healthy) ~ 
+	(1| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp0.5int = glmer(cbind(d$damage, d$healthy) ~ 
+	spblock2 + (1| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp1int = glmer(cbind(d$damage, d$healthy) ~ 
+	r + spblock2 + r:spblock2 + (1| spblock2 / receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+AICctab(sp0int, sp1int, sp0.5int, nobs=65)
+anova(sp0.5int, sp1int)
+
+sp0intx = glmer(cbind(d$damage, d$healthy) ~ 
+	(1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp0.5intx = glmer(cbind(d$damage, d$healthy) ~ 
+	spblock2 + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+spnoint2x = glmer(cbind(d$damage, d$healthy) ~ 
+	r + spblock2 + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+spnoint1x = glmer(cbind(d$damage, d$healthy) ~ 
+	r + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+sp1intx = glmer(cbind(d$damage, d$healthy) ~ 
+	r + spblock2 + r:spblock2 + (1|receiver), data=d, 
+	family='binomial', REML=FALSE)
+
+sp1intxmeans = glmer(cbind(d$damage, d$healthy) ~ 
+	r + spblock2 + r:spblock2 + (1|receiver) - 1, data=d, 
+	family='binomial', REML=FALSE)
+	
+AICctab(sp0intx, sp1intx, sp0.5intx, spnoint1x, spnoint2x, nobs=65, weights=TRUE)
+AICtab(sp0intx, sp1intx, sp0.5intx, spnoint1x, spnoint2x, weights=TRUE)
+extractDIC(sp1intx) - extractDIC(sp1intx)
+extractDIC(sp0.5intx) - extractDIC(sp1intx)
+extractDIC(spnoint2x) - extractDIC(sp1intx)
+extractDIC(spnoint1x) - extractDIC(sp1intx)
+extractDIC(sp0intx) - extractDIC(sp1intx)
+
+
+
+
+AICctab(sp0intx, sp1intx, sp0.5intx, spnoint1x, spnoint2x, x0, xx, xr, xxr, xxrint, nobs=65, weights=TRUE)
+
+AICctab(sp0intx, sp1intx, sp0.5intx, sp0int, sp1int, sp0.5int, nobs=65, weights=TRUE)
+BICtab(sp0intx, sp1intx, sp0.5intx, sp0int, sp1int, sp0.5int, nobs=65)
+
+anova(sp0.5intx, sp1intx)
+anova(sp0intx, sp1intx, sp0.5intx, spnoint1x, spnoint2x, nobs=65)
+
+
+extractDIC(sp0.5intx) - extractDIC(sp1intx)
+
+AICctab(sp0intx, sp1intx, sp0.5intx, spnoint1x, spnoint2x, k22, k23, k23.5,
+	k30, k31, k31.5, nobs=65, weights=TRUE)
+
+
+
+# simulate counts using ran eff estimate from sp1intx
+# does it match the observed distribution?
+par(mfrow=c(3,2))
+hist(d$damage, xlim=c(0,100))
+hist(rbinom(65, 100, mean(d$damage/100)), xlim=c(0,100))
+herbsim = rbinom(65, 100, 
+	plogis( rnorm(65, mean = qlogis(mean(d$damage/100)), sd = 1.0404) ) )
+hist(herbsim, xlim=c(0,100))
+herbsim = rbinom(65, 100, 
+	plogis( rnorm(65, mean = qlogis(mean(d$damage/100)), sd = 1.0404) ) )
+hist(herbsim, xlim=c(0,100))
+herbsim = rbinom(65, 100, 
+	plogis( rnorm(65, mean = qlogis(mean(d$damage/100)), sd = 1.0404) ) )
+hist(herbsim, xlim=c(0,100))
+herbsim = rbinom(65, 100, 
+	plogis( rnorm(65, mean = qlogis(mean(d$damage/100)), sd = 1.0404) ) )
+hist(herbsim, xlim=c(0,100))
+# looks close enough, mode could be closer to zero.
+
+
+#------ explore effects of 2 spatial blocks  -----------------#
+
+plot(damage.prop ~ r, data=d, pch=as.character(d$spblock2),
+	col=d$spblock2)
+lines(loess.smooth(d$r[d$spblock2==1], d$damage.prop[d$spblock2==1]))
+lines(loess.smooth(d$r[d$spblock2==2], d$damage.prop[d$spblock2==2]), 
+	col='red')
+abline(lm(damage.prop ~ r, data=d, subset=d$spblock2==1), lty=2)
+abline(lm(damage.prop ~ r, data=d, subset=d$spblock2==2), lty=2,
+	col='red')
+
+
+summary(lm(damage.prop ~ r, data=d, subset=d$spblock2==1))
+summary(lm(damage.prop ~ r, data=d, subset=d$spblock2==2))
+
+#----------- plot prediction of spblock2 interaction x model-------#
+
+post.sp1intx = sample.naive.posterior(sp1intx)
+
+newr = seq(-0.6, 0.8, length=100)
+#newblock = sort(rep(1:2, 100))
+
+pred.sp1intx.block1 = sapply(newr, 
+	function(z) plogis(mean(post.sp1intx[,1] + post.sp1intx[,2] * z)))
+ci.sp1intx.block1 = sapply(newr,
+	function(z) plogis(HPDI(post.sp1intx[,1] + post.sp1intx[,2] * z)))
+
+pred.sp1intx.block2 = sapply(newr, 
+	function(z) plogis(mean(post.sp1intx[,1] + post.sp1intx[,2] * z +
+	post.sp1intx[,3] + post.sp1intx[,4] * z)))
+ci.sp1intx.block2 = sapply(newr,
+	function(z) plogis(HPDI(post.sp1intx[,1] + post.sp1intx[,2] * z +
+	post.sp1intx[,3] + post.sp1intx[,4] * z)))
+
+plot(damage.prop ~ r, data=d, pch=20,col=d$spblock2, 
+	ylab='Rate of herbivory on receiver',
+	xlab='Relatedness between volatile donor and receiver',
+	las=1)
+lines(newr, pred.sp1intx.block1)
+lines(newr, ci.sp1intx.block1[1,], lty=2)
+lines(newr, ci.sp1intx.block1[2,], lty=2)
+lines(newr, pred.sp1intx.block2, col='red')
+lines(newr, ci.sp1intx.block2[1,], lty=2, col='red')
+lines(newr, ci.sp1intx.block2[2,], lty=2, col='red')
+legend(-0.15, 1, pch=20, lty=1, col=c(1,2),
+	legend=c('East block, low herbivory', 'West block, high herbivory'))
 
 
 #----------- exploratory variogram analysis ----------------#
@@ -471,13 +743,16 @@ plot(nb10, coordinates(d))
 cor.nb10 = sp.correlogram(nblist, d$damage, order=10, method='I')
 
 correl = correlog(coordinates(d), d$damage)
+# log transformed
 correllog = correlog(coordinates(d), log(d$damage))
 
 plot(correl[,1], correl[,2], pch=(c(19,19, rep(21,11))), type='b')
 abline(h=0, lty=2, col='grey')
-plot(correllog[1:11,1], correllog[1:11,2], pch=(c(19,19, rep(21,9))), type='b')
+# log transofmed
+plot(correllog[1:10,1], correllog[1:10,2], pch=(c(19,19, rep(21,8))), type='b',
+	xlab='Distance', ylab='Moran I', las=1)
 abline(h=0, lty=2, col='grey')
-#autocorrelation to about 10 m
+#autocorrelation to about 11 m
 
 # with residuals #
 correl.glmm.r.res = correlog(coordinates(d), residuals(k11, type='pearson'))
@@ -527,6 +802,7 @@ autocov = autocov_dist(d$damage, nbs=10, coordinates(d))
 
 plot(autocov ~ d$autodam)
 plot(d$damage ~ autocov)
+abline(lm(d$damage ~ autocov))
 
 ac0 = glm(cbind(damage, healthy) ~ autocov, data=d, family='binomial')
 ac1 = glm(cbind(damage, healthy) ~ r + autocov, data=d, family='binomial')
@@ -570,7 +846,7 @@ AICtab(m0,m1)
 #-------------------- GAM on transformed data -----------------#
 library(mgcv)
 gam0 = gam(z ~ 1)
-gam1 = gam(z ~ d$r)
+gam1 = gam(z ~ r, data=d)
 
 AICtab(gam0, gam1)
 anova(gam0, gam1)
@@ -579,6 +855,7 @@ sg0xy = gam(z ~ 1 + s(x,y), data=d)
 sg1xy = gam(z ~ r + s(x,y), data=d)
 sg0x = gam(z ~ 1 + s(x), data=d)
 sg1x = gam(z ~ r + s(x), data=d)
+
 AICtab(sg0xy, sg1xy, sg0x, sg1x)
 
 
@@ -618,9 +895,61 @@ summary(m1PQL)
 
 
 
+#------------------- check for spat autocorr within the 2 blocks --------#
 
 
+### first for block 1 ###
+# turn x-y coordinates into a square distance matrix
+dists1 = as.matrix(dist(cbind(d$x[d$spblock2==1],d$y[d$spblock2==1]), diag=TRUE, upper=TRUE))
 
+## inverse distance weights ##
+rW1 = 1/(1+dists1)
+diag(rW1) = 0
+rlistW1 = mat2listw(rW1, row.names=d$receiver[d$spblock2==1])
+summary(rlistW1)
+
+## negative exponential ##
+nexpW1 = exp(-dists1 * 0.5)
+diag(nexpW1) = 0
+nelistW1 = mat2listw(nexpW1, row.names=d$receiver[d$spblock2==1])
+summary(nelistW1)
+
+## Moran's I ##
+# sim data with no spat autocorr
+uncorr1 = rbinom(35, 100, mean(d$damage[d$spblock2==1]/100))
+moran.test(d$damage[d$spblock2==1], listw=nelistW1)
+moran.test(log(d$damage[d$spblock2==1]), listw=nelistW1)
+moran.test(d$damage[d$spblock2==1], listw=rlistW1)
+moran.test(log(d$damage[d$spblock2==1]), listw=rlistW1)
+moran.test(uncorr1, listw=nelistW1)
+moran.test(uncorr1, listw=rlistW1)
+
+
+### second for block 2 ###
+dists2 = as.matrix(dist(cbind(d$x[d$spblock2==2],d$y[d$spblock2==2]), diag=TRUE, upper=TRUE))
+
+## inverse distance weights ##
+rW2 = 1/(1+dists2)
+diag(rW2) = 0
+rlistW2 = mat2listw(rW2, row.names=d$receiver[d$spblock2==2])
+summary(rlistW1)
+
+## negative exponential ##
+nexpW2 = exp(-dists2 * 0.5)
+diag(nexpW2) = 0
+nelistW2 = mat2listw(nexpW2, row.names=d$receiver[d$spblock2==2])
+summary(nelistW1)
+
+## Moran's I ##
+# sim data with no spat autocorr
+uncorr2 = rbinom(30, 100, mean(d$damage[d$spblock2==2]/100))
+moran.test(d$damage[d$spblock2==2], listw=nelistW2)
+moran.test(log(d$damage[d$spblock2==2]), listw=nelistW2)
+moran.test(d$damage[d$spblock2==2], listw=rlistW2)
+moran.test(log(d$damage[d$spblock2==2]), listw=rlistW2)
+
+moran.test(uncorr1, listw=nelistW1)
+moran.test(uncorr1, listw=rlistW1)
 
 
 
